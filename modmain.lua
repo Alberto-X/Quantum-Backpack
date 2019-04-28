@@ -1,16 +1,3 @@
---[[
-NOTES:
-	- net variables can only be changed by host?, so can only use for host -> client communication ?
-	- -- An illustrative example of how to use a global prefab post init, in this case, we're making a player prefab post init.
-	  env.AddPlayerPostInit = function(fn)
-		  env.AddPrefabPostInitAny( function(inst)
-			  if inst and inst:HasTag("player") then fn(inst) end
-		  end)
-	  end
-	- 
-
-]]
-
 PrefabFiles = 
 {
 	"backpack_quantum",
@@ -29,94 +16,99 @@ local TUNING = GLOBAL.TUNING
 
 GLOBAL.STRINGS.NAMES.BACKPACK_QUANTUM = "Quantumly Entangled Backpack"
 GLOBAL.STRINGS.RECIPE_DESC.BACKPACK_QUANTUM = "In dire need of something simple?"
-GLOBAL.STRINGS.CHARACTERS.GENERIC.DESCRIBE.BACKPACK_QUANTUM = "This could be useful..."
+GLOBAL.STRINGS.CHARACTERS.GENERIC.DESCRIBE.BACKPACK_QUANTUM = "This could be quite useful..."
 GLOBAL.STRINGS.CHARACTERS.WICKERBOTTOM.DESCRIBE.BACKPACK_QUANTUM = "Quantum mechanics is not my specialty, but I won't question it."
 GLOBAL.STRINGS.CHARACTERS.WENDY.DESCRIBE.BACKPACK_QUANTUM = "Can it teleport my heart away?"
 GLOBAL.STRINGS.CHARACTERS.WAXWELL.DESCRIBE.BACKPACK_QUANTUM = "Oh Charlie, what have you done..."
 
 AddRecipe("backpack_quantum", {GLOBAL.Ingredient("cutgrass", 6), GLOBAL.Ingredient("twigs", 6), GLOBAL.Ingredient("nightmarefuel", 2)}, GLOBAL.RECIPETABS.MAGIC, GLOBAL.TECH.MAGIC_TWO, nil, nil, nil, 1, nil, "images/inventoryimages/backpack_quantum.xml", "backpack_quantum.tex")
-TUNING.QUANTA = {}
+GLOBAL.QUANTA_BACKPACK = {}
 
-local function OnCannotBeOpenedDirty(inst)
-	print(">> _cannotbeopened is dirty.")
-	inst.components.container.canbeopened = not inst.replica.container._cannotbeopened:value()
-end
-
-local function modContainerReplica(component)
-	print("AddComponentPostInit: ", component)
-	print("AddComponentPostInit: ", component.inst)
-	if component.inst.prefab == "backpack_quantum" then
-		component._opener = net_entity(inst.GUID, "container._opener", "container._openerdirty")
-		print("running container_replica mod")
-		if GLOBAL.TheWorld.ismastersim then
-			component.inst:ListenForEvent("container._cannotbeopeneddirty", OnCannotBeOpenedDirty)    --only need to check _cannotbeopened on host, so can update container.canbeopened (used in RUMMAGE action)
-		end
-		
-		local orig_SetOpener = component.SetOpener
-		component.SetOpener = function(self, opener)
-			if self.inst.prefab == "backpack_quantum" then
-				if opener then
-					self._opener:set(opener)
-				end
-			end
-			orig_SetOpener(self, opener)
+GLOBAL.containerwithitems = function()
+	--find the quantum container with items
+	for k, v in pairs(GLOBAL.QUANTA_BACKPACK) do
+		if not v.components.container:IsEmpty() then
+			return v
 		end
 	end
 end
---AddComponentPostInit("container_replica", modContainerReplica)
 
-function modContainer(component)
-	local orig_IsOpen = component.IsOpen
-	component.IsOpen = function(self)
-		print(">> running modded IsOpen")
-		if self.inst.prefab == "backpack_quantum" then
-			for k, v in pairs(TUNING.QUANTA) do
-				if v.components.container.opener ~= nil then
-					return true
-				end
-			end
+GLOBAL.containerempty = function()
+	--find an empty quantum container
+	for k, v in pairs(GLOBAL.QUANTA_BACKPACK) do
+		if v.components.container:IsEmpty() then
+			return v
+		end
+	end
+end
+
+GLOBAL.quantumtunnel = function(from, target)
+	if from ~= nil and target ~= nil then
+		for i, slot in pairs(from.components.container.slots) do
+			--This will loop through every item in the chest with the items and move them to the called one
+			target.components.container:GiveItem(from.components.container:RemoveItemBySlot(i), i)
+		end
+	end
+end
+
+GlOBAL.findcontainerindex = function(inst)
+	for k, v in pairs(GLOBAL.QUANTA_BACKPACK) do
+		if v.GUID == inst.GUID then
+			return k
+		end
+	end
+end
+
+GLOBAL.CanOpenQuantum = function()
+	for k, v in pairs(GLOBAL.QUANTA_BACKPACK) do
+		if v.components.container:IsOpen() then
 			return false
-		else
-			orig_IsOpen(self)
 		end
 	end
-	
-	local orig_IsOpenedBy = component.IsOpenedBy
-	component.IsOpenedBy = function(self, guy)
-		print(">> running modded IsOpenedBy")
-		if self.inst.prefab == "backpack_quantum" then
-			for k, v in pairs(TUNING.QUANTA) do
-				if v.components.container.opener == guy then
-					return true
-				end
+	return true
+end
+
+local RUMMAGEFN = GLOBAL.ACTIONS.RUMMAGE.fn
+
+GLOBAL.ACTIONS.RUMMAGE.fn = function(act)
+	local targ = act.target or act.invobject
+	if targ.prefab == "backpack_quantum" and not targ.components.container:IsOpen() and not CanOpenQuantum() then
+		return false, "INUSE"
+	else
+		return RUMMAGEFN(act)
+	end
+end
+
+local function AllowRummage(prefab)
+	if prefab.UseItemFromInvTile ~= nil then
+		local OldUseItemFromInvTile = prefab.UseItemFromInvTile
+		prefab.UseItemFromInvTile = function(inst, item)
+			if item.prefab == "backpack_quantum" and inst._activeitem == nil and inst.GetEquippedItem(inst, EQUIPSLOTS.BODY) == item then
+				inst._parent.components.playercontroller:RemoteUseItemFromInvTile(BufferedAction(self.inst, nil, ACTIONS.RUMMAGE, item), item)
+			else
+				OldUseItemFromInvTile(inst, item)
 			end
-			return false
-		else
-			orig_IsOpenedBy(self, guy)
-		end
-	end
-	
-	local orig_Open = component.Open
-	component.Open = function(self, doer)
-		print(">> running modded Open")
-		if not self:IsOpen() then
-			orig_Open(self, doer)
-			if self:IsOpen() then
-				self.canbeopened = false
-			end
-		end
-	end
-	
-	local orig_Close = component.Close
-	component.Close = function(self)
-		print(">> running modded Close")
-		orig_Close(self)
-		if not self:IsOpen() then
-			self.canbeopened = true
 		end
 	end
 end
-AddComponentPostInit("container", modContainer)
+
+AddPrefabPostInit("inventory_classified", AllowRummage)
+
+local function HandleRummage(component)
+	if component.UseItemFromInvTile ~= nil then
+		local OldInvCompUseItemFromInvTile = component.UseItemFromInvTile
+		component.UseItemFromInvTile = function(self, item, actioncode, mod_name)
+			if item.prefab == "backpack_quantum" and actioncode == ACTIONS.RUMMAGE.code then
+				print("Received: RPC.UseItemFromInvTile, RUMMAGE requested for a backpack.")
+				self.inst.components.locomotor:PushAction(BufferedAction(self.inst, nil, ACTIONS.RUMMAGE, item, nil, nil, nil), true)
+			else
+				OldInvCompUseItemFromInvTile(self, item, actioncode, mod_name)
+			end
+		end
+	end
+end
+
+AddComponentPostInit("inventory", HandleRummage)
 
 --------------------------------------------------------------------------
 --[[ backpack_quantum ]]

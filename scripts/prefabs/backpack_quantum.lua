@@ -5,6 +5,17 @@ local assets =
     Asset("ANIM", "anim/ui_backpack_2x4.zip"),
 }
 
+local function entangle(inst)
+	print(tostring(inst).." has been entangled(aka added to QUANTA_BACKPACK).")
+	table.insert(QUANTA_BACKPACK, inst)
+end
+
+local function unentangle(inst)
+	print(tostring(inst).." has been unentangled(aka removed to QUANTA_BACKPACK).")
+	quantumtunnel(inst, containerempty()) --move items to an empty container
+	table.remove(QUANTA_BACKPACK, findcontainerindex(inst))
+end
+
 local function onequip(inst, owner)
     local skin_build = inst:GetSkinBuild()
     if skin_build ~= nil then
@@ -16,7 +27,8 @@ local function onequip(inst, owner)
         owner.AnimState:OverrideSymbol("swap_body", "swap_backpack", "swap_body")
     end
 
-    if inst.components.container ~= nil then
+	--check other entangled backpacks before opening
+    if inst.components.container ~= nil and CanOpenQuantum() then
         inst.components.container:Open(owner)
     end
 end
@@ -45,6 +57,7 @@ local function onburnt(inst)
 end
 
 local function onignite(inst)
+    quantumtunnel(inst, containerempty()) --move items to an empty container
     if inst.components.container ~= nil then
         inst.components.container.canbeopened = false
     end
@@ -56,66 +69,16 @@ local function onextinguish(inst)
     end
 end
 
-local function onopen(inst)	
-	print("Updating backpack (onopen): ", inst.GUID)
-	if TUNING.QUANTA[1] and inst ~= TUNING.QUANTA[1] then
-		for k = 1, inst.components.container:GetNumSlots() do
-			inst.components.container:RemoveItemBySlot(k)
-			inst.components.container:GiveItem(TUNING.QUANTA[1].components.container:RemoveItemBySlot(k), k)
-		end
-	end
-end
-local function onclose(inst, doer)
-	print("start onclose() fn")
-	if TUNING.QUANTA[1] and inst ~= TUNING.QUANTA[1] then
-		for k = 1, inst.components.container:GetNumSlots() do
-			TUNING.QUANTA[1].components.container:RemoveItemBySlot(k)
-			TUNING.QUANTA[1].components.container:GiveItem(inst.components.container:RemoveItemBySlot(k), k)
-		end
-	end
-	
-	--[[for k, backpack in pairs(TUNING.QUANTA) do
-		if backpack ~= inst then
-			print("Updating backpack: ", backpack.GUID)
-			for k2, slot in pairs(inst.components.container.slots) do
-				if slot == nil then
-					--backpack.components.container:RemoveItemBySlot(k2)
-				else
-					backpack.components.container.slots[k2] = slot
-				end
-				--if slot then
-				--	backpack.components.container.slots[k2] = slot
-				--end
-			end
-		end
-	end]]
+local function onopen(inst)
+	quantumtunnel(containerwithitems(), inst)
 end
 
-local function OnCannotBeOpenedDirty(inst)
-	print(">> _cannotbeopened is dirty.")
-	inst.components.container.canbeopened = not inst.replica.container._cannotbeopened:value()
-end
-
-local function modContainerReplica(self)
-	print("Entity replicated: ", self)
-	print("Entity replicated: ", self.inst)
-	if self.prefab == "backpack_quantum" then
-		print("Quantum entity replicated: ", self.GUID)
-		self.replica.container._opener = net_entity(self.GUID, "container._opener", "container._openerdirty")
-		if GLOBAL.TheWorld.ismastersim then
-			self:ListenForEvent("container._cannotbeopeneddirty", OnCannotBeOpenedDirty)    --only need to check _cannotbeopened on host, so can update container.canbeopened (used in RUMMAGE action)
-		end
-		
-		local orig_SetOpener = self.replica.container.SetOpener
-		self.replica.container.SetOpener = function(self, opener)
-			if self.inst.prefab == "backpack_quantum" then
-				if opener then
-					self._opener:set(opener)
-				end
-			end
-			orig_SetOpener(self, opener)
-		end
-	end
+local function onremoveentity(inst)
+	unentangle(inst)
+	inst.components.container:DropEverything()
+	inst.components.container:Close()
+	print("BACKPACK: onremoveentity")
+	print("   inst: "..tostring(inst))
 end
 
 local function fn()
@@ -134,6 +97,7 @@ local function fn()
     inst.AnimState:PlayAnimation("anim")
 
     inst:AddTag("backpack")
+	inst:AddTag("quantum")
 
     inst.MiniMapEntity:SetIcon("backpack_quantum.png")
 
@@ -142,8 +106,9 @@ local function fn()
 	inst.OnEntityReplicated = modContainerReplica
 
     inst.entity:SetPristine()	
-		
-	table.insert(TUNING.QUANTA, inst)
+	
+	--entangle each backpack instance
+	entangle(inst)
 
     if not TheWorld.ismastersim then
         return inst
@@ -165,7 +130,6 @@ local function fn()
     inst:AddComponent("container")
     inst.components.container:WidgetSetup("backpack_quantum")
 	inst.components.container.onopenfn = onopen
-	inst.components.container.onclosefn = onclose
 
     MakeSmallBurnable(inst)
     MakeSmallPropagator(inst)
@@ -174,6 +138,9 @@ local function fn()
     inst.components.burnable:SetOnExtinguishFn(onextinguish)
 
     MakeHauntableLaunchAndDropFirstItem(inst)
+	
+	--set "on remove" function, which unentangles each backpack
+	inst.OnRemoveEntity = onremoveentity
 
     return inst
 end
