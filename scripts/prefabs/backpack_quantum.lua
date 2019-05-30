@@ -12,7 +12,7 @@ end
 
 local function unentangle(inst)
 	print(tostring(inst).." has been unentangled(aka removed to QUANTA_BACKPACK).")
-	quantumtunnel(inst, containerempty()) --move items to an empty container
+	quantumtunnel(inst, SAVE_BACKPACK)
 	table.remove(QUANTA_BACKPACK, findcontainerindex(inst))
 end
 
@@ -57,7 +57,6 @@ local function onburnt(inst)
 end
 
 local function onignite(inst)
-    quantumtunnel(inst, containerempty()) --move items to an empty container
     if inst.components.container ~= nil then
         inst.components.container.canbeopened = false
     end
@@ -69,16 +68,38 @@ local function onextinguish(inst)
     end
 end
 
-local function onopen(inst)
-	quantumtunnel(containerwithitems(), inst)
+local function onopen(inst, data)
+	local doer = data.doer
+	print("onopen: "..tostring(inst))
+	if AreMultipleOpen() then
+		print("   Multiple Open - inst: "..tostring(inst))
+		inst.components.container:Close() --Close will automatically send the stuff back to the SAVE_BACKPACK
+		quantumtunnel(SAVE_BACKPACK, findopencontainer())
+	else
+		print("   Single Open - inst: "..tostring(inst))
+		quantumtunnel(SAVE_BACKPACK, inst)
+	end
+end
+
+local function onclose(inst)
+	quantumtunnel(inst, SAVE_BACKPACK)
 end
 
 local function onremoveentity(inst)
 	unentangle(inst)
-	inst.components.container:DropEverything()
-	inst.components.container:Close()
-	print("BACKPACK: onremoveentity")
-	print("   inst: "..tostring(inst))
+end
+
+local function onload(inst, data)
+	--Only for clients: Need to open the backpack AFTER a client player has been spawned, so use DoTaskInTime
+	inst:DoTaskInTime(0, function(inst)
+		if inst.components.container:IsOpen() then
+			print("Closing/opening quantum backpack (0s after loading it): "..tostring(inst))
+			print("   After 0s, IsOpen: "..tostring(inst.components.container:IsOpen()))
+			local opener = inst.components.container.opener
+			inst.components.container:Close()
+			inst.components.container:Open(opener)
+		end
+	end)
 end
 
 local function fn()
@@ -102,10 +123,8 @@ local function fn()
     inst.MiniMapEntity:SetIcon("backpack_quantum.png")
 
     inst.foleysound = "dontstarve/movement/foley/backpack"
-	
-	inst.OnEntityReplicated = modContainerReplica
 
-    inst.entity:SetPristine()	
+    inst.entity:SetPristine()
 	
 	--entangle each backpack instance
 	entangle(inst)
@@ -130,6 +149,7 @@ local function fn()
     inst:AddComponent("container")
     inst.components.container:WidgetSetup("backpack_quantum")
 	inst.components.container.onopenfn = onopen
+	inst.components.container.onclosefn = onclose
 
     MakeSmallBurnable(inst)
     MakeSmallPropagator(inst)
@@ -139,8 +159,16 @@ local function fn()
 
     MakeHauntableLaunchAndDropFirstItem(inst)
 	
+	inst.OnLoad = onload
+	
 	--set "on remove" function, which unentangles each backpack
 	inst.OnRemoveEntity = onremoveentity
+	
+	if SAVE_BACKPACK == nil then
+		SAVE_BACKPACK = SpawnPrefab("backpack")
+		SAVE_BACKPACK:AddTag("hidden")
+		SAVE_BACKPACK.Transform:SetPosition(850,0,850)
+	end
 
     return inst
 end
