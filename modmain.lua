@@ -14,6 +14,8 @@ AddMinimapAtlas("minimap/backpack_quantum.xml")
 
 local TUNING = GLOBAL.TUNING
 
+local printnote = "Quantum Backpack Mod: "
+
 GLOBAL.STRINGS.NAMES.BACKPACK_QUANTUM = "Quantumly Entangled Backpack"
 GLOBAL.STRINGS.RECIPE_DESC.BACKPACK_QUANTUM = "In dire need of something simple?"
 GLOBAL.STRINGS.CHARACTERS.GENERIC.DESCRIBE.BACKPACK_QUANTUM = "This could be quite useful..."
@@ -42,7 +44,7 @@ GLOBAL.containerwithitems = function()
 end
 
 GLOBAL.quantumtunnel = function(from, target)
-	print("Tunneling from "..tostring(from).." to "..tostring(target))
+	--print(printnote.."Tunneling from "..tostring(from).." to "..tostring(target))
 	if from ~= nil and target ~= nil then
 		for i, slot in pairs(from.components.container.slots) do
 			--Loop through every item in 'from' and move them to 'target'
@@ -134,12 +136,13 @@ local function SaveBackpackHandling(prefab) --for when the game loads
 			OldOnLoad()
 		end
 		if data ~= nil and data.hidden then
-			print("Loading existing save backpack: "..tostring(inst))
+			print(printnote.."Loading existing save backpack: "..tostring(inst))
 			if GLOBAL.SAVE_BACKPACK ~= nil then
 				GLOBAL.SAVE_BACKPACK:Remove()
 			end
 			GLOBAL.SAVE_BACKPACK = inst
 			GLOBAL.SAVE_BACKPACK:AddTag("hidden")
+			GLOBAL.SAVE_BACKPACK:Hide()
 		end
 	end
 	local OldOnSave = prefab.OnSave ----------This section will mark the original SAVE_BACKPACK so it can be found by OnLoad
@@ -148,7 +151,7 @@ local function SaveBackpackHandling(prefab) --for when the game loads
 			OldOnSave()
 		end
 		if inst:HasTag("hidden") then
-			print("Saving existing save backpack: "..tostring(inst))
+			print(printnote.."Saving existing save backpack: "..tostring(inst))
 			data.hidden = true
 		end
 	end
@@ -174,7 +177,7 @@ local function HandleRummage(component)
 		local OldInvCompUseItemFromInvTile = component.UseItemFromInvTile
 		component.UseItemFromInvTile = function(self, item, actioncode, mod_name)
 			if item.prefab == "backpack_quantum" and actioncode == GLOBAL.ACTIONS.RUMMAGE.code then
-				print("Received: RPC.UseItemFromInvTile, RUMMAGE requested for a backpack.")
+				print(printnote.."Received: RPC.UseItemFromInvTile, RUMMAGE requested for a backpack.")
 				self.inst.components.locomotor:PushAction(GLOBAL.BufferedAction(self.inst, nil, GLOBAL.ACTIONS.RUMMAGE, item, nil, nil, nil), true)
 			else
 				OldInvCompUseItemFromInvTile(self, item, actioncode, mod_name)
@@ -189,13 +192,13 @@ local function QuantumSave(component)
 	component.OnSave = function(self)
 		local open = GLOBAL.findopencontainer()
 		if self.inst:HasTag("hidden") and open ~= nil then
-			print("Quantum saving...")
+			--print(printnote.."Quantum saving...")
 			--Temporarily copy contents of the open quantum backpack, save it, then undo copy
 			shallowquantumtunnel(open, self.inst)
 			local ret = OldOnSave(self)
 			clearshallowcopy(self.inst)
 			return ret
-		elseif self.inst.prefab ~= "backpack_quantum" then		--Don't save contents of quantum backpacks
+		elseif self.inst.prefab ~= "backpack_quantum" then	--Don't save contents of quantum backpacks
 			return OldOnSave(self)
 		end
 	end
@@ -229,16 +232,16 @@ local containers = GLOBAL.require "containers"
 containers.MAXITEMSLOTS = math.max(containers.MAXITEMSLOTS, params.backpack_quantum.widget.slotpos ~= nil and #params.backpack_quantum.widget.slotpos or 0)
 local old_widgetsetup = containers.widgetsetup
 function containers.widgetsetup(container, prefab, data)
-        local pref = prefab or container.inst.prefab
-        if pref == "backpack_quantum" then
-                local t = params[pref]
-                if t ~= nil then
-                        for k, v in pairs(t) do
-                                container[k] = v
-                        end
-                        container:SetNumSlots(container.widget.slotpos ~= nil and #container.widget.slotpos or 0)
-                end
-        else
-                return old_widgetsetup(container, prefab)
+	local pref = prefab or container.inst.prefab
+	if pref == "backpack_quantum" then
+		local t = params[pref]
+		if t ~= nil then
+			for k, v in pairs(t) do
+				container[k] = v
+			end
+			container:SetNumSlots(container.widget.slotpos ~= nil and #container.widget.slotpos or 0)
+		end
+	else
+		return old_widgetsetup(container, prefab)
     end
 end

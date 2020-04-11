@@ -5,13 +5,15 @@ local assets =
     Asset("ANIM", "anim/ui_backpack_2x4.zip"),
 }
 
+local printnote = "Quantum Backpack Mod: "
+
 local function entangle(inst)
-	print(tostring(inst).." has been entangled(aka added to QUANTA_BACKPACK).")
+	--print(printnote..tostring(inst).." has been entangled(aka added to QUANTA_BACKPACK).")
 	table.insert(QUANTA_BACKPACK, inst)
 end
 
 local function unentangle(inst)
-	print(tostring(inst).." has been unentangled(aka removed to QUANTA_BACKPACK).")
+	--print(printnote..tostring(inst).." has been unentangled(aka removed to QUANTA_BACKPACK).")
 	quantumtunnel(inst, SAVE_BACKPACK)
 	table.remove(QUANTA_BACKPACK, findcontainerindex(inst))
 end
@@ -70,13 +72,12 @@ end
 
 local function onopen(inst, data)
 	local doer = data.doer
-	print("onopen: "..tostring(inst))
 	if AreMultipleOpen() then
-		print("   Multiple Open - inst: "..tostring(inst))
+		--print(printnote.."   Multiple Open - inst: "..tostring(inst))
 		inst.components.container:Close() --Close will automatically send the stuff back to the SAVE_BACKPACK
 		quantumtunnel(SAVE_BACKPACK, findopencontainer())
 	else
-		print("   Single Open - inst: "..tostring(inst))
+		--print(printnote.."   Single Open - inst: "..tostring(inst))
 		quantumtunnel(SAVE_BACKPACK, inst)
 	end
 end
@@ -93,8 +94,8 @@ local function onload(inst, data)
 	--Only for clients: Need to open the backpack AFTER a client player has been spawned, so use DoTaskInTime
 	inst:DoTaskInTime(0, function(inst)
 		if inst.components.container:IsOpen() then
-			print("Closing/opening quantum backpack (0s after loading it): "..tostring(inst))
-			print("   After 0s, IsOpen: "..tostring(inst.components.container:IsOpen()))
+			--print(printnote.."Closing/opening quantum backpack (0s after loading it): "..tostring(inst))
+			--print(printnote.."   After 0s, IsOpen: "..tostring(inst.components.container:IsOpen()))
 			local opener = inst.components.container.opener
 			inst.components.container:Close()
 			inst.components.container:Open(opener)
@@ -166,8 +167,9 @@ local function fn()
 	
 	if SAVE_BACKPACK == nil then
 		SAVE_BACKPACK = SpawnPrefab("backpack")
+		SAVE_BACKPACK:Hide()
 		SAVE_BACKPACK:AddTag("hidden")
-		SAVE_BACKPACK.Transform:SetPosition(850,0,850)
+		SAVE_BACKPACK.Transform:SetPosition(c_find("pigking"):GetPosition():Get())
 	end
 
     return inst
