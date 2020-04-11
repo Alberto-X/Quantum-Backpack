@@ -1,5 +1,5 @@
 name = "Quantum Entangled Backpacks"
-description = "Never have to travel the world to share ONE DUMB LITTLE ITEM."
+description = "Never have to travel the world to share ONE DUMB LITTLE ITEM. \nA new type of backpack will appear in the magic tab that lets you share items with others who have that backpack as well."
 author = "rawii22 & lord_of_les_ralph"
 version = "1.0"
 
